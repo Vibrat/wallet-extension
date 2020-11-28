@@ -234,7 +234,6 @@ export const SendContainer: React.FC<SendProps> = ({ primary = false, background
   const mode = primary ? 'storybook-send--primary' : 'storybook-send--secondary'
   const [activeMode, setActiveMode] = React.useState('in-network')
   const [active, setActive] = useState(PRV_TOKEN_ID)
-  const tempDisableOutnetwork = true
 
   const onHandleActiveMode = (mode) => {
     if (activeMode !== mode) {
@@ -309,7 +308,7 @@ export const SendContainer: React.FC<SendProps> = ({ primary = false, background
               </button>
             </li>
             <li
-              onClick={() => !tempDisableOutnetwork && onHandleActiveMode('out-network')}
+              onClick={() => onHandleActiveMode('out-network')}
               className={
                 tokenDetail[tokenId]?.Verified || tokenId === null
                   ? 'out-network tab flex-1 text-center'
@@ -320,7 +319,7 @@ export const SendContainer: React.FC<SendProps> = ({ primary = false, background
                 type="button"
                 className={classNames(
                   'bg-white inline-block py-2 px-4',
-                  tempDisableOutnetwork ? 'disabled:opacity-50 cursor-not-allowed' : 'hover:text-black hover:font-medium',
+                  'hover:text-black hover:font-medium',
                 )}
               >
                 Out Network
