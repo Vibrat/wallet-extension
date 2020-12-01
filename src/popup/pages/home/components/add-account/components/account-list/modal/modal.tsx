@@ -3,7 +3,8 @@ import React from 'react'
 import { getTheme, mergeStyleSets, FontWeights, ContextualMenu, Modal, IDragOptions, IconButton, IIconProps, Spinner } from '@fluentui/react'
 import { useId, useBoolean } from '@uifabric/react-hooks'
 import { SecondaryButton } from 'popup/components/button'
-import { useAddAccount } from 'queries/create-account.mutation'
+import { useRenameAccount } from 'queries/create-account.mutation'
+import { useSettingStore } from 'popup/stores/features/settings'
 import './modal.css'
 import classNames from 'classnames'
 
@@ -19,26 +20,22 @@ const dragOptions: IDragOptions = {
 }
 const cancelIcon: IIconProps = { iconName: 'Cancel' }
 
-export const ModalAddAccount: React.FunctionComponent<Props> = ({ showModal, hideModal, isModalOpen }) => {
+export const ModalRenameAccount: React.FunctionComponent<Props> = ({ showModal, hideModal, isModalOpen }) => {
   const [isDraggable, { toggle: toggleIsDraggable }] = useBoolean(true)
-
+  const selectedAccount = useSettingStore((s) => s.selectAccountName)
   // Use useId() to ensure that the IDs are unique on the page.
   // (It's also okay to use plain strings and manually ensure uniqueness.)
   const titleId = useId('title')
-  const [name, setName] = React.useState('')
+  const [name, setName] = React.useState(selectedAccount)
   const [loading, setLoading] = React.useState(false)
 
-  const [addAccount] = useAddAccount(() => {
-    hideModal()
-    setLoading(false)
-    setName('')
-  })
+  const [renameAccount] = useRenameAccount(name)
   const [err, setErr] = React.useState(false)
-  const clickAddAccount = () => {
+  const clickRenameAccount = () => {
     if (name === '') {
       return setErr(true)
     }
-    return addAccount(name)
+    return renameAccount({ accountName: name })
   }
   React.useEffect(() => {
     if (name !== '') {
@@ -56,7 +53,7 @@ export const ModalAddAccount: React.FunctionComponent<Props> = ({ showModal, hid
         dragOptions={isDraggable ? dragOptions : undefined}
       >
         <div className={contentStyles.header}>
-          <span id={titleId}>Add Account</span>
+          <span id={titleId}>Edit Account</span>
           <IconButton styles={iconButtonStyles} iconProps={cancelIcon} ariaLabel="Close popup modal" onClick={hideModal} />
         </div>
         <div className={contentStyles.body}>
@@ -66,8 +63,8 @@ export const ModalAddAccount: React.FunctionComponent<Props> = ({ showModal, hid
             {err ? <p className="edit-error">You must enter the field name</p> : null}
           </form>
           <div className={classNames('flex align-middle justify-center w-full mt-6')}>
-            <SecondaryButton iconProps={{ iconName: 'Add' }} onClick={clickAddAccount}>
-              {loading ? <Spinner /> : 'Add'}
+            <SecondaryButton iconProps={{ iconName: 'EditSolid12' }} onClick={clickRenameAccount}>
+              {loading ? <Spinner /> : 'Edit'}
             </SecondaryButton>
           </div>
         </div>
@@ -96,6 +93,7 @@ const contentStyles = mergeStyleSets({
     },
   ],
   body: {
+    position: 'relative',
     flex: '4 4 auto',
     padding: '0 24px 24px 24px',
     overflowY: 'hidden',

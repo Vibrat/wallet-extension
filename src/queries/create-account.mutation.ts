@@ -5,12 +5,16 @@ import { queryCache } from 'services/query-cache'
 import { getAccountRuntime, runtime } from 'services/wallet'
 import { PrivacyToken } from 'incognito-sdk/build/web/module/src/walletInstance/token'
 import { createWalletWithPassword, followToken, importAccountFromPrivateKey, unfollowToken } from '../services/wallet'
+
 import { GET_WALLET_KEY } from './wallet.queries'
 
 const PRV_TOKEN_ID = '0000000000000000000000000000000000000000000000000000000000000004'
 export const useCreateWallet = () => {
+  const [addAccount] = useAddAccount(() => { })
   return useMutation((params: { password: string; name: string }) => createWalletWithPassword(params.name, params.password), {
     onSuccess: async (data, { name }) => {
+      await addAccount(name)
+      runtime.walletRuntime.masterAccount.removeAccount('Account 0')
       console.log('created wallet name: ', name)
       await queryCache.invalidateQueries(GET_WALLET_KEY)
       const firstAccount = runtime.walletRuntime.masterAccount.getAccounts()[0]
@@ -71,13 +75,33 @@ export const useAddAccount = (hidePanel: () => void) => {
   return useMutation((accountName: string) => addAccount(accountName), {
     onSuccess: async () => {
       await queryCache.invalidateQueries(['useGetListAccountName.name'])
-      await queryCache.invalidateQueries(['useGetListAccountName.name'])
       hidePanel()
     },
     onError: (err) => {
       console.error(err)
     },
   })
+}
+export const useRenameAccount = (accountName: string) => {
+  const selectedAccount = useSettingStore((s) => s.selectAccountName)
+  const [importAccount] = useImportAccountFromPrivateKey(() => { })
+  const [reAccount] = useRemoveAccount()
+  return useMutation((params: { accountName: string }) => renameAccount(selectedAccount, params.accountName, reAccount, importAccount), {
+    onSuccess: async () => {
+      await queryCache.invalidateQueries(['useGetListAccountName.name'])
+      await queryCache.invalidateQueries(['useGetAccount.name'])
+      await queryCache.invalidateQueries(['useGetTokenForAccount.name'])
+    },
+    onError: async (err) => {
+      console.log(err)
+    },
+  })
+}
+const renameAccount = async (selectedAccount: string, accountName: string, reAccount: any, importAccount: any) => {
+  const account = await getAccountRuntime(selectedAccount)
+  await reAccount()
+  const importAcc = await importAccountFromPrivateKey(accountName, account.key.keySet.privateKeySerialized)
+  return importAcc
 }
 interface PaymentInfoModel {
   paymentAddressStr: string
@@ -97,7 +121,6 @@ export const useSendToken = (hidePanel: () => void, setMessage: (value: any) => 
         paymentInfoList: variables.paymentInfoList,
         tokenId: variables.tokenId,
         nativeFee: variables.nativeFee,
-        privacyFee: variables.privacyFee,
       }),
     {
       onSuccess: async () => {
@@ -126,7 +149,11 @@ export const useBurningToken = (setMessage: (value: any) => void) => {
       return burningToken(variables.tokenId, variables.address, selectedAccount, variables.burningAmount)
     },
     {
-      onSuccess: async () => { },
+      onSuccess: async () => {
+        await queryCache.invalidateQueries(['useGetListAccountName.name'])
+        await queryCache.invalidateQueries(['useGetAccount.name'])
+        await queryCache.invalidateQueries(['useGetTokenForAccount.name'])
+      },
       onError: (err: ErrorSendToken) => {
         setMessage({
           name: 'error',
@@ -152,12 +179,12 @@ export interface SendInNetworkPayload {
 }
 
 const sendToken = async (payload: SendInNetworkPayload) => {
-  const { accountName, paymentInfoList, tokenId, nativeFee, privacyFee = 20 } = payload
+  const { accountName, paymentInfoList, tokenId, nativeFee, privacyFee = 0 } = payload
   const account = await getAccountRuntime(accountName)
-
+  console.log(account)
   if (tokenId !== PRV_TOKEN_ID) {
     const token = (await account.getFollowingPrivacyToken(tokenId)) as PrivacyToken
-    const history = await token.transfer(paymentInfoList, nativeFee.toString(), privacyFee.toString())
+    const history = await token.transfer(paymentInfoList, nativeFee.toString(), '0')
     console.log(history)
   } else {
     const history = await account.nativeToken.transfer(paymentInfoList, nativeFee.toString())

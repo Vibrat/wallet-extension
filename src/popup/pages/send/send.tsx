@@ -6,15 +6,14 @@ import React, { useState, useRef, useEffect } from 'react'
 import { Icon, Customizer, IFocusTrapZoneProps, ILayerProps, LayerHost, mergeStyles, Panel, Persona, PersonaSize } from '@fluentui/react'
 import logo from 'popup/assets/lsb.png'
 import { useId } from '@uifabric/react-hooks'
+import _ from 'lodash'
 
 import { useSettingStore } from 'popup/stores/features/settings'
 import classNames from 'classnames'
 import { useSendToken, useBurningToken } from 'queries/create-account.mutation'
 import { useGetTokenForAccount, useGetTokenBalance, getTokenFromTokenIds } from 'queries/token.queries'
-import { FaButton } from 'popup/components/button'
 import { Header } from 'popup/components/header/header'
 import { estimateFee } from 'services/wallet'
-import { useTheme } from 'popup/services'
 import { Message } from './message/message'
 import styles from './send.module.css'
 
@@ -218,9 +217,38 @@ export const SendContainer: React.FC<SendProps> = ({ primary = false, background
   })
   const [sendToken] = useSendToken(dismissPanel, setMessage)
   const [sendEth] = useBurningToken(setMessage)
+  const clickSendHandle = () => {
+    const paymentInfoList = []
+    const prv = '0000000000000000000000000000000000000000000000000000000000000004'
+    const useToken = !tokenId ? active : tokenId
+    const tokenDetail = getTokenFromTokenIds([useToken])
+
+    if (useToken === prv) {
+      paymentInfoList.push({ ...paymentInfo, amount: `${(Number(paymentInfo.amount) || 0) * 1e9}` })
+    } else {
+      paymentInfoList.push({ ...paymentInfo, amount: `${(Number(paymentInfo.amount) || 0) * Math.pow(10, tokenDetail[useToken].PDecimals)}` })
+    }
+    if (activeMode === 'in-network') {
+      return sendToken({
+        accountName: !accountName ? selectedAccount : accountName,
+        paymentInfoList,
+        tokenId: useToken,
+        nativeFee: estimatedFee,
+      })
+    }
+
+    return sendEth({
+      tokenId: !tokenId
+        ? tokenAccounts?.find((item) => item.TokenId === active && item.Verified)?.TokenId || tokenAccounts?.find((item) => item.Verified)?.TokenId
+        : tokenId,
+      address: ethInfo.outchainAddress,
+      accountName: selectedAccount,
+      burningAmount: ethInfo.burningAmount,
+    })
+  }
   const [paymentInfo, setPaymentInfo] = React.useState({
     paymentAddressStr: '',
-    amount: '',
+    amount: null,
     message: '',
   })
   const [ethInfo, setEthInfo] = React.useState({
@@ -234,6 +262,7 @@ export const SendContainer: React.FC<SendProps> = ({ primary = false, background
   const mode = primary ? 'storybook-send--primary' : 'storybook-send--secondary'
   const [activeMode, setActiveMode] = React.useState('in-network')
   const [active, setActive] = useState(PRV_TOKEN_ID)
+  const [error, setError] = useState('')
 
   const onHandleActiveMode = (mode) => {
     if (activeMode !== mode) {
@@ -286,6 +315,17 @@ export const SendContainer: React.FC<SendProps> = ({ primary = false, background
   }
 
   const { data: balance, isSuccess: balanceStatus } = useGetTokenBalance(!tokenId ? active : tokenId, selectedAccount)
+  React.useEffect(() => {
+    if (paymentInfo.amount !== null) {
+      if (paymentInfo.amount === '') {
+        setError('Required')
+      } else if (paymentInfo.amount > balance) {
+        setError('Insufficient ballance')
+      } else {
+        setError('')
+      }
+    }
+  }, [paymentInfo.amount])
   React.useEffect(() => {
     setTimeout(() => {
       setMessage({
@@ -377,6 +417,7 @@ export const SendContainer: React.FC<SendProps> = ({ primary = false, background
                     placeholder="0.0"
                     name="amount"
                   />
+                  {error ? <p className={styles.error}>{error}</p> : null}
                 </div>
 
                 <div className="mt-6 mb-6 text-center flex flex-col justify-center items-center">
@@ -409,26 +450,10 @@ export const SendContainer: React.FC<SendProps> = ({ primary = false, background
                 </div>
                 <button
                   onClick={() => {
-                    const paymentInfoList = []
-                    paymentInfoList.push({ ...paymentInfo, amount: `${(Number(paymentInfo.amount) || 0) * 1e9}` })
-                    if (activeMode === 'in-network') {
-                      return sendToken({
-                        accountName: !accountName ? selectedAccount : accountName,
-                        paymentInfoList,
-                        tokenId: !tokenId ? active : tokenId,
-                        nativeFee: estimatedFee,
-                      })
+                    if (!error) {
+                      const debounced = _.debounce(clickSendHandle, 1000, { maxWait: 10000, leading: true, trailing: false })
+                      debounced()
                     }
-
-                    return sendEth({
-                      tokenId: !tokenId
-                        ? tokenAccounts?.find((item) => item.TokenId === active && item.Verified)?.TokenId ||
-                        tokenAccounts?.find((item) => item.Verified)?.TokenId
-                        : tokenId,
-                      address: ethInfo.outchainAddress,
-                      accountName: selectedAccount,
-                      burningAmount: ethInfo.burningAmount,
-                    })
                   }}
                   type="button"
                   className="text-white bg-blue-5 mt-5 py-4 px-4 rounded flex items-center w-full justify-center"
